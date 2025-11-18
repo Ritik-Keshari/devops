@@ -1,0 +1,65 @@
+:root {
+  --wa-green: #25D366;
+  --wa-dark: #075E54;
+  --wa-bg: #ece5dd;
+}
+
+.register-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: var(--wa-bg);
+  font-family: "Segoe UI", sans-serif;
+}
+
+.register-card {
+  width: 350px;
+  background: white;
+  padding: 28px;
+  border-radius: 14px;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.15);
+  text-align: center;
+}
+
+.register-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--wa-dark);
+  margin-bottom: 20px;
+}
+
+.register-input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.register-button {
+  width: 100%;
+  padding: 12px;
+  background: var(--wa-dark);
+  color: white;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.register-button:disabled {
+  background: #888;
+}
+
+.register-link {
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.register-link span {
+  color: var(--wa-green);
+  cursor: pointer;
+  font-weight: 600;
+}
