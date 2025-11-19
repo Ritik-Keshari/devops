@@ -1,5 +1,4 @@
-const BACKEND = process.env.REACT_APP_BACKEND_URL || "https://afser.duckdns.org/"; 
-// you can put your default local IP OR empty
+const BACKEND = process.env.REACT_APP_BACKEND_URL || "http://afser.duckdns.org:8080";
 
 export default {
   BACKEND,
