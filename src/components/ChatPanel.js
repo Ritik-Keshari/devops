@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { sendPrivateMessage } from "../ws/websocket";
 import MessageBubble from "./MessageBubble";
 
-const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages }) => {
+const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, onVideoCall }) => {
   const [input, setInput] = useState("");
   const scrollRef = useRef(null);
 
@@ -22,7 +22,6 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages })
       timestamp: new Date().toISOString()
     };
 
-    // auto render message
     updateLocalMessages(prev => ({
       ...prev,
       [selectedUser]: [...(prev[selectedUser] || []), msg]
@@ -46,6 +45,23 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages })
         <div className="wa-header-left">
           <div className="wa-avatar">{selectedUser[0].toUpperCase()}</div>
           <div className="wa-header-name">{selectedUser}</div>
+        </div>
+
+        {/* 🔥 VIDEO CALL BUTTON */}
+        <div className="wa-header-right">
+          <button
+            className="wa-video-call-btn"
+            onClick={() => onVideoCall(selectedUser)}
+            title="Start Video Call"
+            style={{
+              border: "none",
+              background: "transparent",
+              fontSize: "20px",
+              cursor: "pointer"
+            }}
+          >
+            📹
+          </button>
         </div>
       </div>
 

@@ -4,8 +4,9 @@ import ChatPanel from "./components/ChatPanel";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import AIChatBox from "./components/AIChatBox";
+import VideoCall from "./components/VideoCall";
 import { connectWebSocket } from "./ws/websocket";
-import Config from "./config";   // ⭐ NEW
+import Config from "./config";
 import "./styles/chat.css";
 
 function App() {
@@ -17,24 +18,43 @@ function App() {
   const [messageStore, setMessageStore] = useState({});
   const [aiMessages, setAiMessages] = useState([]);
 
+  const [showVideoCall, setShowVideoCall] = useState(null); // <-- 🔥 target user for video call
+  const videoCallRef = useRef(null);
+
   const wsConnected = useRef(false);
 
   // WebSocket connection
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || wsConnected.current) return;
 
-    if (wsConnected.current) return;
     wsConnected.current = true;
 
     connectWebSocket(currentUser.username, (msg) => {
-      setMessageStore(prev => {
-        const chatId = msg.sender === currentUser.username ? msg.receiver : msg.sender;
+      setMessageStore((prev) => {
+        const chatId =
+          msg.sender === currentUser.username ? msg.receiver : msg.sender;
+
         return {
           ...prev,
-          [chatId]: [...(prev[chatId] || []), msg]
+          [chatId]: [...(prev[chatId] || []), msg],
         };
       });
     });
+
+    // 🔥 GLOBAL VIDEO CALL SIGNAL HANDLER
+    window.onCallSignal = (signal) => {
+      console.log("APP RECEIVED SIGNAL:", signal);
+
+      // If incoming call
+      if (signal.type === "offer") {
+        setShowVideoCall(signal.from); // Open VideoCall UI
+      }
+
+      // Forward to VideoCall component
+      if (videoCallRef.current?.handleSignal) {
+        videoCallRef.current.handleSignal(signal);
+      }
+    };
 
     return () => {
       wsConnected.current = false;
@@ -46,8 +66,8 @@ function App() {
   useEffect(() => {
     if (screen === "CHAT") {
       fetch(Config.USER_LIST)
-        .then(res => res.json())
-        .then(data => setUsers(data || []));
+        .then((res) => res.json())
+        .then((data) => setUsers(data || []));
     }
   }, [screen]);
 
@@ -71,11 +91,21 @@ function App() {
 
   // Screens
   if (screen === "LOGIN") {
-    return <Login onLogin={handleLogin} onSwitch={() => setScreen("REGISTER")} />;
+    return (
+      <Login
+        onLogin={handleLogin}
+        onSwitch={() => setScreen("REGISTER")}
+      />
+    );
   }
 
   if (screen === "REGISTER") {
-    return <Register onRegister={handleRegister} onSwitch={() => setScreen("LOGIN")} />;
+    return (
+      <Register
+        onRegister={handleRegister}
+        onSwitch={() => setScreen("LOGIN")}
+      />
+    );
   }
 
   return (
@@ -86,6 +116,7 @@ function App() {
         selectedUser={selectedUser}
         onSelectUser={setSelectedUser}
         onLogout={handleLogout}
+        onVideoCall={(user) => setShowVideoCall(user)} // 🔥 Add Call Button in sidebar if needed
       />
 
       <AIChatBox messages={aiMessages} setMessages={setAiMessages} />
@@ -95,7 +126,20 @@ function App() {
         selectedUser={selectedUser}
         messages={messageStore[selectedUser] || []}
         updateLocalMessages={setMessageStore}
+        onVideoCall={() => setShowVideoCall(selectedUser)} // 🔥 Add Call button in chat panel
       />
+
+      {/* 🔥 VIDEO CALL PANEL */}
+      {showVideoCall && (
+        <div className="video-call-wrapper">
+          <VideoCall
+            ref={videoCallRef}
+            currentUser={currentUser}
+            targetUser={showVideoCall}
+            onClose={() => setShowVideoCall(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }
