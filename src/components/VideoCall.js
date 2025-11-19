@@ -1,5 +1,4 @@
 import React, {
-  useEffect,
   useRef,
   useState,
   forwardRef,
@@ -7,7 +6,7 @@ import React, {
 } from "react";
 
 const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun.l.google.com:19302" }
 ];
 
 const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
@@ -20,19 +19,24 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
   const [callState, setCallState] = useState("idle"); 
   // idle, calling, ringing, in-call
 
+  // Send signaling to backend
   const sendSignal = (msg) => {
     if (window.stompClient?.connected) {
       window.stompClient.send("/app/call", {}, JSON.stringify(msg));
+    } else {
+      console.error("WebSocket STOMP not connected");
     }
   };
 
   const startLocalStream = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: true,
+      video: true
     });
     localStreamRef.current = stream;
-    localVideoRef.current.srcObject = stream;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+    }
     return stream;
   };
 
@@ -45,13 +49,15 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
           type: "candidate",
           from: currentUser.username,
           to: targetUser,
-          candidate: event.candidate,
+          candidate: event.candidate
         });
       }
     };
 
     pc.ontrack = (event) => {
-      remoteVideoRef.current.srcObject = event.streams[0];
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
     };
 
     if (localStreamRef.current) {
@@ -62,20 +68,19 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
 
     pcRef.current = pc;
 
-    // Add queued ICE candidates
+    // Apply queued ICE candidates
     candidateQueue.current.forEach((c) => pc.addIceCandidate(c));
     candidateQueue.current = [];
 
     return pc;
   };
 
-  /* OUTGOING CALL */
+  // Caller → create offer
   const startCallAsCaller = async () => {
     setCallState("calling");
-
     await startLocalStream();
-    const pc = createPeerConnection();
 
+    const pc = createPeerConnection();
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
@@ -83,11 +88,11 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
       type: "offer",
       from: currentUser.username,
       to: targetUser,
-      sdp: offer.sdp,
+      sdp: offer.sdp
     });
   };
 
-  /* INCOMING OFFER */
+  // Receiver → handle offer → create answer
   const handleOffer = async (msg) => {
     setCallState("ringing");
 
@@ -103,13 +108,13 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
       type: "answer",
       from: currentUser.username,
       to: msg.from,
-      sdp: answer.sdp,
+      sdp: answer.sdp
     });
 
     setCallState("in-call");
   };
 
-  /* INCOMING ANSWER */
+  // Caller → handle answer
   const handleAnswer = async (msg) => {
     if (!pcRef.current) return;
     await pcRef.current.setRemoteDescription({
@@ -119,7 +124,7 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     setCallState("in-call");
   };
 
-  /* INCOMING ICE CANDIDATE */
+  // Both → handle ICE candidate
   const handleCandidate = async (msg) => {
     if (!msg.candidate) return;
 
@@ -131,70 +136,88 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     await pcRef.current.addIceCandidate(msg.candidate);
   };
 
-  /* HANGUP */
+  // End call
   const hangup = (notify = true) => {
-    pcRef.current?.close();
-    pcRef.current = null;
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
 
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    localStreamRef.current = null;
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    }
 
     if (notify) {
       sendSignal({
         type: "hangup",
         from: currentUser.username,
-        to: targetUser,
+        to: targetUser
       });
     }
 
     setCallState("idle");
-    onClose?.();
+    if (onClose) onClose();
   };
 
-  /* This exposes methods to App.js */
+  // Expose handler to App.js
   useImperativeHandle(ref, () => ({
     handleSignal(signal) {
       switch (signal.type) {
         case "offer":
           handleOffer(signal);
           break;
+
         case "answer":
           handleAnswer(signal);
           break;
+
         case "candidate":
           handleCandidate(signal);
           break;
+
         case "hangup":
           hangup(false);
           break;
+
+        default:
+          console.warn("Unknown signal type:", signal.type);
       }
-    },
+    }
   }));
 
   return (
-    <div style={{ height: "100%", padding: "10px", background: "#111" }}>
+    <div style={{ height: "100%", padding: 10, background: "#111" }}>
       <div style={{ display: "flex", height: "80%" }}>
         <video
           ref={localVideoRef}
           autoPlay
           muted
           playsInline
-          style={{ width: "180px", height: "140px", background: "#222" }}
+          style={{ width: 180, height: 140, background: "#222" }}
         />
         <video
           ref={remoteVideoRef}
           autoPlay
           playsInline
-          style={{ flex: 1, background: "black", marginLeft: 10 }}
+          style={{
+            flex: 1,
+            background: "black",
+            marginLeft: 10
+          }}
         />
       </div>
 
       <div style={{ marginTop: 10 }}>
         {callState === "idle" && (
-          <button onClick={startCallAsCaller}>Call {targetUser}</button>
+          <button onClick={startCallAsCaller}>
+            Call {targetUser}
+          </button>
         )}
+
         {callState === "calling" && <span>📞 Calling...</span>}
         {callState === "ringing" && <span>📳 Incoming call...</span>}
+
         {callState === "in-call" && (
           <button onClick={() => hangup(true)}>Hang Up</button>
         )}
