@@ -3,15 +3,15 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL || "https://afser.duckdns.org"
 const config = {
   BACKEND,
 
-  // USER CONTROLLER
-  LOGIN: `${BACKEND}/user/login`,
-  REGISTER: `${BACKEND}/user/register`,
-  USER_LIST: `${BACKEND}/user/list`,
+  // USER CONTROLLER (FIXED)
+  LOGIN: `${BACKEND}/api/user/login`,
+  REGISTER: `${BACKEND}/api/user/register`,
+  USER_LIST: `${BACKEND}/api/user/list`,
 
   // WEBSOCKET
   WS: "https://afser.duckdns.org/ws",
 
-  // AI CONTROLLER (corrected)
+  // AI CONTROLLER
   AI_CHAT: `${BACKEND}/api/ai/chat`,
 };
 
