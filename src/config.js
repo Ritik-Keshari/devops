@@ -8,8 +8,8 @@ const config = {
   REGISTER: `${BACKEND}/user/register`,
   USER_LIST: `${BACKEND}/user/list`,
 
-  // WEBSOCKET
-  WS: `wss://afser.duckdns.org/ws`,
+  // WEBSOCKET (FIXED)
+  WS: `https://afser.duckdns.org/ws`,
 
   // AI CONTROLLER
   AI_CHAT: `${BACKEND}/ai/chat`
