@@ -42,4 +42,4 @@ jobs:
             docker pull ${{ secrets.DOCKER_USERNAME }}/chat-frontend:latest
             docker stop chat-frontend || true
             docker rm chat-frontend || true
-            docker run -d -p 80:80 --name chat-frontend ${{ secrets.DOCKER_USERNAME }}/chat-frontend:latest
+            docker run -d -p 3000:80 --name chat-frontend ${{ secrets.DOCKER_USERNAME }}/chat-frontend:latest
