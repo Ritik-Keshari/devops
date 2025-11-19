@@ -1,9 +1,9 @@
-const BACKEND = process.env.REACT_APP_BACKEND_URL || "https://afser.duckdns.org";
+const BACKEND = process.env.REACT_APP_BACKEND_URL || "https://afser.duckdns.org/api";
 
 const config = {
   BACKEND,
 
-  // USER CONTROLLER → NO /api PREFIX
+  // USER CONTROLLER
   LOGIN: `${BACKEND}/user/login`,
   REGISTER: `${BACKEND}/user/register`,
   USER_LIST: `${BACKEND}/user/list`,
@@ -11,8 +11,8 @@ const config = {
   // WEBSOCKET
   WS: `wss://afser.duckdns.org/ws`,
 
-  // AI CONTROLLER → HAS /api PREFIX
-  AI_CHAT: `${BACKEND}/api/ai/chat`
+  // AI CONTROLLER
+  AI_CHAT: `${BACKEND}/ai/chat`
 };
 
 export default config;
