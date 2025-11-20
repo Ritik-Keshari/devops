@@ -22,10 +22,10 @@ export default function ChatInput({ sender, receiver }) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Upload file → get Azure Blob URL
+    console.log("FILE SELECTED:", file);
+
     const fileUrl = await uploadFileToBackend(file);
 
-    // Send message containing file URL
     sendPrivateMessage({
       sender,
       receiver,
@@ -36,11 +36,22 @@ export default function ChatInput({ sender, receiver }) {
 
   return (
     <div className="chat-input-container">
-      {/* File Upload Button */}
-      <label className="file-upload-btn">
+
+      {/* FILE UPLOAD BUTTON (FIXED) */}
+      <button
+        type="button"
+        className="file-upload-btn"
+        onClick={() => document.getElementById("fileInput").click()}
+      >
         📎
-        <input type="file" hidden onChange={onFileSelect} />
-      </label>
+      </button>
+
+      <input
+        id="fileInput"
+        type="file"
+        style={{ display: "none" }}
+        onChange={onFileSelect}
+      />
 
       <input
         className="chat-input"
