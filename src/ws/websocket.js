@@ -7,29 +7,34 @@ let stompClient = null;
 export const connectWebSocket = (username, onMessageReceived) => {
   console.log("connectWebSocket CALLED:", username);
 
-  // Prevent duplicate connections
+  // Avoid duplicate WS
   if (stompClient && stompClient.connected) {
-    console.log("WS already active → skipping");
+    console.log("WS already active – skipping");
     return;
   }
 
-  const socket = new SockJS(`${Config.WS}?username=${username}`);
+  const socket = new SockJS(Config.WS);   // ⭐ FIXED (no query params)
 
   stompClient = new Client({
     webSocketFactory: () => socket,
-    reconnectDelay: 5000,  // auto-reconnect every 5 sec
+
+    connectHeaders: {                     // ⭐ FIXED (pass username correctly)
+      username: username
+    },
+
+    reconnectDelay: 5000,                 // auto reconnect
 
     onConnect: () => {
       console.log("WebSocket connected as:", username);
 
-      // NORMAL CHAT
-      stompClient.subscribe("/user/queue/messages", (message) => {
+      // ⭐ NORMAL PRIVATE MESSAGES
+      stompClient.subscribe(`/user/queue/messages`, (message) => {
         const msg = JSON.parse(message.body);
         onMessageReceived(msg);
       });
 
-      // VIDEO CALL SIGNALING
-      stompClient.subscribe("/user/queue/call", (message) => {
+      // ⭐ VIDEO CALL SIGNALING
+      stompClient.subscribe(`/user/queue/call`, (message) => {
         const signal = JSON.parse(message.body);
         console.log("CALL SIGNAL RECEIVED:", signal);
 
@@ -39,18 +44,17 @@ export const connectWebSocket = (username, onMessageReceived) => {
       });
     },
 
-    // STOMP-level errors
+    // On STOMP protocol error
     onStompError: (frame) => {
-      console.error("STOMP error:", frame.headers['message']);
+      console.error("STOMP error:", frame.headers["message"]);
       console.error("Details:", frame.body);
     },
 
-    // WebSocket closed
+    // WebSocket closing
     onWebSocketClose: () => {
       console.warn("WebSocket closed");
     },
 
-    // WS errors
     onWebSocketError: () => {
       console.error("WebSocket error");
     }
@@ -60,7 +64,10 @@ export const connectWebSocket = (username, onMessageReceived) => {
   window.stompClient = stompClient;
 };
 
-// CLEANER WAY TO SEND CHAT MESSAGES
+
+// =============================
+// ⭐ SEND PRIVATE MESSAGE
+// =============================
 export const sendPrivateMessage = (message) => {
   if (!stompClient || !stompClient.connected) {
     console.warn("WS not connected");
@@ -73,7 +80,10 @@ export const sendPrivateMessage = (message) => {
   });
 };
 
-// CLEANER WAY TO SEND VIDEO CALL SIGNALS
+
+// =============================
+// ⭐ SEND VIDEO CALL SIGNAL
+// =============================
 export const sendCallSignal = (signal) => {
   if (!stompClient || !stompClient.connected) {
     console.warn("WS not connected for call signal");

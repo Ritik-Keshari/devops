@@ -25,3 +25,29 @@ export async function uploadFileToBackend(file) {
     return null;
   }
 }
+
+// ⭐ NEW FUNCTION: Upload Profile Picture
+export async function uploadProfilePicture(file, username) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("username", username);
+
+  try {
+    const res = await fetch(Config.UPLOAD_PROFILE, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      console.error("PROFILE UPLOAD FAILED:", res.status);
+      console.error(await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    return data.url;
+  } catch (error) {
+    console.error("PROFILE UPLOAD EXCEPTION:", error);
+    return null;
+  }
+}

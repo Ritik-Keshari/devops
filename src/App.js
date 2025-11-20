@@ -77,12 +77,18 @@ function App() {
   // AUTH HANDLERS
   // -------------------------
   const handleLogin = (user) => {
-    setCurrentUser(user);
+    setCurrentUser({
+      ...user,
+      profileImageUrl: user.profileImageUrl || "/default-avatar.png",
+    });
     setScreen("CHAT");
   };
 
   const handleRegister = (user) => {
-    setCurrentUser(user);
+    setCurrentUser({
+      ...user,
+      profileImageUrl: user.profileImageUrl || "/default-avatar.png",
+    });
     setScreen("CHAT");
   };
 
@@ -129,6 +135,7 @@ function App() {
         onSelectUser={setSelectedUser}
         onLogout={handleLogout}
         onVideoCall={(user) => setShowVideoCall(user)}
+        setCurrentUser={setCurrentUser}  // ⭐ REQUIRED FOR PROFILE PICTURE
       />
 
       {/* MAIN CHAT PANEL */}

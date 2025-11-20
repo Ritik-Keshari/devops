@@ -13,6 +13,8 @@ const config = {
 
   // AI CONTROLLER
   AI_CHAT: `${BACKEND}/api/ai/chat`,
+  UPLOAD_PROFILE: `${BACKEND}/api/user/upload-profile`,
+
 };
 
 export default config;

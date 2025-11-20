@@ -18,28 +18,29 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
 
     const msg = {
       sender: currentUser.username,
-      receiver: selectedUser,
+      receiver: selectedUser.username,   // ⭐ always object
       content: input.trim(),
+      type: "TEXT",
       timestamp: new Date().toISOString()
     };
 
+    // Update local UI
     updateLocalMessages(prev => ({
       ...prev,
-      [selectedUser]: [...(prev[selectedUser] || []), msg]
+      [selectedUser.username]: [...(prev[selectedUser.username] || []), msg]
     }));
 
     sendPrivateMessage(msg);
     setInput("");
   };
 
-  // ⭐ FILE SELECT HANDLER (UPLOAD + SEND)
+  // ⭐ FILE UPLOAD HANDLER
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     console.log("FILE SELECTED:", file);
 
-    // Upload to backend → Azure URL returned
     const fileUrl = await uploadFileToBackend(file);
     console.log("UPLOAD URL:", fileUrl);
 
@@ -48,31 +49,25 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
       return;
     }
 
-    // Now send message with file URL
-    sendPrivateMessage({
+    const msg = {
       sender: currentUser.username,
-      receiver: selectedUser,
+      receiver: selectedUser.username,  // ⭐ object only
       content: fileUrl,
       type: file.type.startsWith("image") ? "IMAGE" : "FILE",
       timestamp: new Date().toISOString(),
-    });
+    };
 
-    // Update local UI chat
+    // Send via WebSocket
+    sendPrivateMessage(msg);
+
+    // Local UI update
     updateLocalMessages(prev => ({
       ...prev,
-      [selectedUser]: [
-        ...(prev[selectedUser] || []),
-        {
-          sender: currentUser.username,
-          receiver: selectedUser,
-          content: fileUrl,
-          type: file.type.startsWith("image") ? "IMAGE" : "FILE",
-          timestamp: new Date().toISOString(),
-        }
-      ]
+      [selectedUser.username]: [...(prev[selectedUser.username] || []), msg]
     }));
   };
 
+  // No user selected
   if (!selectedUser) {
     return (
       <main className="wa-panel empty">
@@ -81,18 +76,32 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
     );
   }
 
+  // ⭐ Profile picture logic
+  const profilePic = selectedUser.profileImageUrl || "/default-avatar.png";
+  const selectedName = selectedUser.username;
+
   return (
     <main className="wa-panel">
+
+      {/* HEADER */}
       <div className="wa-header">
         <div className="wa-header-left">
-          <div className="wa-avatar">{selectedUser[0].toUpperCase()}</div>
-          <div className="wa-header-name">{selectedUser}</div>
+
+          {/* ⭐ PROFILE IMAGE */}
+          <img
+            src={profilePic}
+            alt=""
+            className="wa-avatar-img"
+            style={{ width: 40, height: 40 }}
+          />
+
+          <div className="wa-header-name">{selectedName}</div>
         </div>
 
         <div className="wa-header-right">
           <button
             className="wa-video-call-btn"
-            onClick={() => onVideoCall(selectedUser)}
+            onClick={() => onVideoCall(selectedName)}
             title="Start Video Call"
             style={{
               border: "none",
@@ -106,16 +115,17 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
         </div>
       </div>
 
+      {/* CHAT MESSAGES */}
       <div className="wa-messages" ref={scrollRef}>
         {messages.map((m, i) => (
           <MessageBubble key={i} message={m} me={m.sender === currentUser.username} />
         ))}
       </div>
 
-      {/* ⭐ FIXED INPUT BAR AND FILE BUTTON */}
+      {/* INPUT BAR */}
       <div className="wa-input-bar">
 
-        {/* 📎 FIXED FILE UPLOAD BUTTON */}
+        {/* 📎 FILE UPLOAD BUTTON */}
         <button
           type="button"
           className="file-upload-btn"
@@ -136,7 +146,7 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder={`Message ${selectedUser}`}
+          placeholder={`Message ${selectedName}`}
         />
 
         <button className="wa-send" type="button" onClick={sendMessage}>
