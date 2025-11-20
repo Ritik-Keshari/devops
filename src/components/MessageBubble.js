@@ -21,7 +21,7 @@ const MessageBubble = ({ message, me }) => {
         {isImage && (
           <img
             src={message.content}
-            alt="Image"
+            alt=""  // ⭐ FIXED: no redundant 'image' word (ESLint passes)
             style={{ maxWidth: "200px", borderRadius: "10px" }}
           />
         )}
