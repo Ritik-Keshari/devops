@@ -5,7 +5,7 @@ import { uploadFileToBackend } from "../utils/fileUpload";
 export default function ChatInput({ sender, receiver }) {
   const [message, setMessage] = useState("");
 
-  const onSend = async () => {
+  const onSend = () => {
     if (!message.trim()) return;
 
     sendPrivateMessage({
@@ -20,11 +20,12 @@ export default function ChatInput({ sender, receiver }) {
 
   const onFileSelect = async (event) => {
     const file = event.target.files[0];
-    if (!file) return;
-
     console.log("FILE SELECTED:", file);
 
+    if (!file) return;
+
     const fileUrl = await uploadFileToBackend(file);
+    console.log("UPLOAD URL:", fileUrl);
 
     sendPrivateMessage({
       sender,
@@ -37,17 +38,17 @@ export default function ChatInput({ sender, receiver }) {
   return (
     <div className="chat-input-container">
 
-      {/* FILE UPLOAD BUTTON (FIXED) */}
+      {/* FIXED FILE UPLOAD BUTTON */}
       <button
         type="button"
         className="file-upload-btn"
-        onClick={() => document.getElementById("fileInput").click()}
+        onClick={() => document.getElementById("hiddenFileInput").click()}
       >
         📎
       </button>
 
       <input
-        id="fileInput"
+        id="hiddenFileInput"
         type="file"
         style={{ display: "none" }}
         onChange={onFileSelect}
