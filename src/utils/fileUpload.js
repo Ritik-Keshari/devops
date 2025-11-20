@@ -4,6 +4,8 @@ export async function uploadFileToBackend(file) {
   const formData = new FormData();
   formData.append("file", file);
 
+  console.log("UPLOAD TO URL:", `${Config.BACKEND}/api/file/upload`);
+
   try {
     const res = await fetch(`${Config.BACKEND}/api/file/upload`, {
       method: "POST",
@@ -11,16 +13,15 @@ export async function uploadFileToBackend(file) {
     });
 
     if (!res.ok) {
-      console.log("STATUS:", res.status);
-      console.log("TEXT:", await res.text());
-      throw new Error("Upload failed");
+      console.error("UPLOAD FAILED:", res.status);
+      console.error("RESPONSE:", await res.text());
+      return null;
     }
 
     const data = await res.json();
     return data.url;
-
   } catch (error) {
-    console.error("File upload error:", error);
+    console.error("UPLOAD EXCEPTION:", error);
     return null;
   }
 }
