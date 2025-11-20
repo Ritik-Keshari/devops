@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { sendPrivateMessage } from "../ws/websocket";
 import MessageBubble from "./MessageBubble";
+import { uploadFileToBackend } from "../utils/fileUpload";
 
 const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, onVideoCall }) => {
   const [input, setInput] = useState("");
@@ -31,14 +32,45 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
     setInput("");
   };
 
-  // ⭐ FILE SELECT HANDLER
-  const handleFileSelect = (e) => {
+  // ⭐ FILE SELECT HANDLER (UPLOAD + SEND)
+  const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    alert("Selected: " + file.name);
+    console.log("FILE SELECTED:", file);
 
-    // 🔜 Later we upload file to Azure Blob here
+    // Upload to backend → Azure URL returned
+    const fileUrl = await uploadFileToBackend(file);
+    console.log("UPLOAD URL:", fileUrl);
+
+    if (!fileUrl) {
+      alert("File upload failed");
+      return;
+    }
+
+    // Now send message with file URL
+    sendPrivateMessage({
+      sender: currentUser.username,
+      receiver: selectedUser,
+      content: fileUrl,
+      type: file.type.startsWith("image") ? "IMAGE" : "FILE",
+      timestamp: new Date().toISOString(),
+    });
+
+    // Update local UI chat
+    updateLocalMessages(prev => ({
+      ...prev,
+      [selectedUser]: [
+        ...(prev[selectedUser] || []),
+        {
+          sender: currentUser.username,
+          receiver: selectedUser,
+          content: fileUrl,
+          type: file.type.startsWith("image") ? "IMAGE" : "FILE",
+          timestamp: new Date().toISOString(),
+        }
+      ]
+    }));
   };
 
   if (!selectedUser) {
@@ -57,7 +89,6 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
           <div className="wa-header-name">{selectedUser}</div>
         </div>
 
-        {/* 🔥 VIDEO CALL BUTTON */}
         <div className="wa-header-right">
           <button
             className="wa-video-call-btn"
@@ -81,19 +112,25 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
         ))}
       </div>
 
-      {/* ⭐ UPDATED INPUT BAR WITH FILE BUTTON */}
+      {/* ⭐ FIXED INPUT BAR AND FILE BUTTON */}
       <div className="wa-input-bar">
 
-        {/* 📎 FILE UPLOAD BUTTON */}
-        <label className="file-upload-btn">
+        {/* 📎 FIXED FILE UPLOAD BUTTON */}
+        <button
+          type="button"
+          className="file-upload-btn"
+          onClick={() => document.getElementById("fileInputHidden").click()}
+        >
           📎
-          <input
-            type="file"
-            accept="image/*, .pdf, .doc, .docx"
-            onChange={handleFileSelect}
-            style={{ display: "none" }}
-          />
-        </label>
+        </button>
+
+        <input
+          id="fileInputHidden"
+          type="file"
+          accept="image/*,.pdf,.doc,.docx"
+          style={{ display: "none" }}
+          onChange={handleFileSelect}
+        />
 
         <input
           value={input}
@@ -102,7 +139,9 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
           placeholder={`Message ${selectedUser}`}
         />
 
-        <button className="wa-send" onClick={sendMessage}>Send</button>
+        <button className="wa-send" type="button" onClick={sendMessage}>
+          Send
+        </button>
       </div>
     </main>
   );
