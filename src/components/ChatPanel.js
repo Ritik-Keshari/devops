@@ -31,6 +31,16 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
     setInput("");
   };
 
+  // ⭐ FILE SELECT HANDLER
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    alert("Selected: " + file.name);
+
+    // 🔜 Later we upload file to Azure Blob here
+  };
+
   if (!selectedUser) {
     return (
       <main className="wa-panel empty">
@@ -71,13 +81,27 @@ const ChatPanel = ({ currentUser, selectedUser, messages, updateLocalMessages, o
         ))}
       </div>
 
+      {/* ⭐ UPDATED INPUT BAR WITH FILE BUTTON */}
       <div className="wa-input-bar">
+
+        {/* 📎 FILE UPLOAD BUTTON */}
+        <label className="file-upload-btn">
+          📎
+          <input
+            type="file"
+            accept="image/*, .pdf, .doc, .docx"
+            onChange={handleFileSelect}
+            style={{ display: "none" }}
+          />
+        </label>
+
         <input
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           placeholder={`Message ${selectedUser}`}
         />
+
         <button className="wa-send" onClick={sendMessage}>Send</button>
       </div>
     </main>

@@ -18,12 +18,14 @@ function App() {
   const [messageStore, setMessageStore] = useState({});
   const [aiMessages, setAiMessages] = useState([]);
 
-  const [showVideoCall, setShowVideoCall] = useState(null); // <-- 🔥 target user for video call
+  const [showVideoCall, setShowVideoCall] = useState(null);
   const videoCallRef = useRef(null);
 
   const wsConnected = useRef(false);
 
-  // WebSocket connection
+  // -------------------------
+  // 🔥 WEBSOCKET CONNECTION
+  // -------------------------
   useEffect(() => {
     if (!currentUser || wsConnected.current) return;
 
@@ -41,16 +43,14 @@ function App() {
       });
     });
 
-    // 🔥 GLOBAL VIDEO CALL SIGNAL HANDLER
+    // 🔥 GLOBAL HANDLER FOR VIDEO SIGNALS
     window.onCallSignal = (signal) => {
       console.log("APP RECEIVED SIGNAL:", signal);
 
-      // If incoming call
       if (signal.type === "offer") {
-        setShowVideoCall(signal.from); // Open VideoCall UI
+        setShowVideoCall(signal.from);
       }
 
-      // Forward to VideoCall component
       if (videoCallRef.current?.handleSignal) {
         videoCallRef.current.handleSignal(signal);
       }
@@ -62,7 +62,9 @@ function App() {
     };
   }, [currentUser]);
 
-  // Load user list
+  // -------------------------
+  // 🔥 LOAD USER LIST
+  // -------------------------
   useEffect(() => {
     if (screen === "CHAT") {
       fetch(Config.USER_LIST)
@@ -71,6 +73,9 @@ function App() {
     }
   }, [screen]);
 
+  // -------------------------
+  // AUTH HANDLERS
+  // -------------------------
   const handleLogin = (user) => {
     setCurrentUser(user);
     setScreen("CHAT");
@@ -89,7 +94,9 @@ function App() {
     if (window.stompClient) window.stompClient.deactivate();
   };
 
-  // Screens
+  // -------------------------
+  // RENDER LOGIN / REGISTER
+  // -------------------------
   if (screen === "LOGIN") {
     return (
       <Login
@@ -108,30 +115,37 @@ function App() {
     );
   }
 
+  // -------------------------
+  // 🔥 MAIN CHAT UI
+  // -------------------------
   return (
     <div className="wa-app">
+
+      {/* LEFT SIDEBAR */}
       <Sidebar
         users={users}
         currentUser={currentUser}
         selectedUser={selectedUser}
         onSelectUser={setSelectedUser}
         onLogout={handleLogout}
-        onVideoCall={(user) => setShowVideoCall(user)} // 🔥 Add Call Button in sidebar if needed
+        onVideoCall={(user) => setShowVideoCall(user)}
       />
 
-      <AIChatBox messages={aiMessages} setMessages={setAiMessages} />
-
+      {/* MAIN CHAT PANEL */}
       <ChatPanel
         currentUser={currentUser}
         selectedUser={selectedUser}
         messages={messageStore[selectedUser] || []}
         updateLocalMessages={setMessageStore}
-        onVideoCall={() => setShowVideoCall(selectedUser)} // 🔥 Add Call button in chat panel
+        onVideoCall={() => setShowVideoCall(selectedUser)}
       />
+
+      {/* AI CHAT (RIGHT FIXED PANEL) */}
+      <AIChatBox messages={aiMessages} setMessages={setAiMessages} />
 
       {/* 🔥 VIDEO CALL PANEL */}
       {showVideoCall && (
-        <div className="video-call-wrapper">
+        <div className="video-call-wrapper active">
           <VideoCall
             ref={videoCallRef}
             currentUser={currentUser}
@@ -140,6 +154,7 @@ function App() {
           />
         </div>
       )}
+
     </div>
   );
 }
