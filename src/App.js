@@ -23,15 +23,17 @@ function App() {
 
   const wsConnected = useRef(false);
 
-  // -------------------------
+  // ----------------------------------------------------
   // 🔥 WEBSOCKET CONNECTION
-  // -------------------------
+  // ----------------------------------------------------
   useEffect(() => {
     if (!currentUser || wsConnected.current) return;
 
     wsConnected.current = true;
 
     connectWebSocket(currentUser.username, (msg) => {
+      console.log("WS RECEIVED:", msg);
+
       setMessageStore((prev) => {
         const chatId =
           msg.sender === currentUser.username ? msg.receiver : msg.sender;
@@ -43,10 +45,8 @@ function App() {
       });
     });
 
-    // 🔥 GLOBAL HANDLER FOR VIDEO SIGNALS
+    // 🔥 VIDEO SIGNALS
     window.onCallSignal = (signal) => {
-      console.log("APP RECEIVED SIGNAL:", signal);
-
       if (signal.type === "offer") {
         setShowVideoCall(signal.from);
       }
@@ -62,9 +62,9 @@ function App() {
     };
   }, [currentUser]);
 
-  // -------------------------
+  // ----------------------------------------------------
   // 🔥 LOAD USER LIST
-  // -------------------------
+  // ----------------------------------------------------
   useEffect(() => {
     if (screen === "CHAT") {
       fetch(Config.USER_LIST)
@@ -73,9 +73,7 @@ function App() {
     }
   }, [screen]);
 
-  // -------------------------
-  // AUTH HANDLERS
-  // -------------------------
+  // AUTH HANDLERS --------------------------------------
   const handleLogin = (user) => {
     setCurrentUser({
       ...user,
@@ -100,30 +98,16 @@ function App() {
     if (window.stompClient) window.stompClient.deactivate();
   };
 
-  // -------------------------
-  // RENDER LOGIN / REGISTER
-  // -------------------------
+  // LOGIN / REGISTER SCREEN HANDLING -------------------
   if (screen === "LOGIN") {
-    return (
-      <Login
-        onLogin={handleLogin}
-        onSwitch={() => setScreen("REGISTER")}
-      />
-    );
+    return <Login onLogin={handleLogin} onSwitch={() => setScreen("REGISTER")} />;
   }
 
   if (screen === "REGISTER") {
-    return (
-      <Register
-        onRegister={handleRegister}
-        onSwitch={() => setScreen("LOGIN")}
-      />
-    );
+    return <Register onRegister={handleRegister} onSwitch={() => setScreen("LOGIN")} />;
   }
 
-  // -------------------------
-  // 🔥 MAIN CHAT UI
-  // -------------------------
+  // MAIN CHAT SCREEN -----------------------------------
   return (
     <div className="wa-app">
 
@@ -135,22 +119,23 @@ function App() {
         onSelectUser={setSelectedUser}
         onLogout={handleLogout}
         onVideoCall={(user) => setShowVideoCall(user)}
-        setCurrentUser={setCurrentUser}  // ⭐ REQUIRED FOR PROFILE PICTURE
+        setCurrentUser={setCurrentUser}
       />
 
-      {/* MAIN CHAT PANEL */}
+      {/* CHAT PANEL */}
       <ChatPanel
         currentUser={currentUser}
         selectedUser={selectedUser}
-        messages={messageStore[selectedUser] || []}
+        allMessages={messageStore}
+        messages={messageStore[selectedUser?.username] || []}  // ⭐ FIXED
         updateLocalMessages={setMessageStore}
-        onVideoCall={() => setShowVideoCall(selectedUser)}
+        onVideoCall={() => setShowVideoCall(selectedUser?.username)}
       />
 
-      {/* AI CHAT (RIGHT FIXED PANEL) */}
+      {/* AI CHAT SIDE PANEL */}
       <AIChatBox messages={aiMessages} setMessages={setAiMessages} />
 
-      {/* 🔥 VIDEO CALL PANEL */}
+      {/* VIDEO CALL POPUP */}
       {showVideoCall && (
         <div className="video-call-wrapper active">
           <VideoCall
@@ -161,7 +146,6 @@ function App() {
           />
         </div>
       )}
-
     </div>
   );
 }

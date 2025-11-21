@@ -13,6 +13,12 @@ const MessageBubble = ({ message, me }) => {
   const isImage = message.type === "IMAGE";
   const isFile = message.type === "FILE";
 
+  // ⭐ Safe timestamp (fallback if missing)
+  const time =
+    message.timestamp
+      ? new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "";
+
   return (
     <div className={`bubble-row ${me ? "me" : "them"}`}>
       <div className={`bubble ${me ? "bubble-me" : "bubble-them"}`}>
@@ -21,8 +27,12 @@ const MessageBubble = ({ message, me }) => {
         {isImage && (
           <img
             src={message.content}
-            alt=""  // ⭐ FIXED: no redundant 'image' word (ESLint passes)
-            style={{ maxWidth: "200px", borderRadius: "10px" }}
+            alt=""
+            style={{
+              maxWidth: "200px",
+              borderRadius: "10px",
+              marginBottom: "5px"
+            }}
           />
         )}
 
@@ -35,7 +45,9 @@ const MessageBubble = ({ message, me }) => {
             style={{
               color: "#0645AD",
               textDecoration: "underline",
-              wordBreak: "break-all"
+              wordBreak: "break-all",
+              display: "inline-block",
+              marginBottom: "5px"
             }}
           >
             📄 {getFileName(message.content)}
@@ -47,9 +59,8 @@ const MessageBubble = ({ message, me }) => {
           <div className="bubble-text">{message.content}</div>
         )}
 
-        <div className="bubble-time">
-          {new Date(message.timestamp).toLocaleTimeString()}
-        </div>
+        {/* ⭐ TIME */}
+        <div className="bubble-time">{time}</div>
       </div>
     </div>
   );
