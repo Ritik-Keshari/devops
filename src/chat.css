@@ -145,3 +145,59 @@
   display: inline-block;
   margin-bottom: 5px;
 }
+/* ================================ */
+/* CHAT MESSAGE CONTAINER FIX       */
+/* ================================ */
+
+.wa-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  background: #e5ddd5;
+}
+
+/* Row wrapper */
+.bubble-row {
+  display: flex;
+  margin-bottom: 10px;
+}
+
+/* Align sender/receiver */
+.bubble-row.me {
+  justify-content: flex-end;
+}
+
+.bubble-row.them {
+  justify-content: flex-start;
+}
+
+/* ================================ */
+/* BUBBLE BOX FIX (Very Important)  */
+/* ================================ */
+
+.bubble {
+  max-width: 65%;     /* Without this, images go full-screen */
+  padding: 10px;
+  border-radius: 10px;
+  position: relative;
+  background: white;
+  word-wrap: break-word;
+}
+
+.bubble-me {
+  background: #dcf8c6; /* WhatsApp green */
+}
+
+.bubble-them {
+  background: #ffffff;
+}
+
+/* Timestamp inside bubble */
+.bubble-time {
+  font-size: 10px;
+  color: #555;
+  margin-top: 4px;
+  text-align: right;
+}

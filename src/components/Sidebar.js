@@ -3,16 +3,13 @@ import { uploadProfilePicture } from "../utils/fileUpload";
 
 const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUser }) => {
 
-  // ⭐ Handle profile picture upload
   const handleProfilePicUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Upload to backend (Azure Blob)
     const url = await uploadProfilePicture(file, currentUser.username);
 
     if (url) {
-      // Update UI instantly
       setCurrentUser((prev) => ({
         ...prev,
         profileImageUrl: url,
@@ -20,8 +17,8 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
     }
   };
 
-  // ⭐ Avatar component with fallback letter
-  const Avatar = ({ url, letter, size = "normal" }) => {
+  // ⭐ FIXED — removed "normal"
+  const Avatar = ({ url, letter, size = "" }) => {
     if (url) {
       return <img src={url} className={`wa-avatar-img ${size}`} alt="avatar" />;
     }
@@ -31,11 +28,9 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
   return (
     <aside className="wa-sidebar">
 
-      {/* ⭐ TOP PROFILE SECTION */}
       <div className="wa-top">
         <div className="wa-profile">
 
-          {/* ⭐ Profile Picture (click to upload) */}
           <div
             className="wa-avatar-wrapper"
             onClick={() => document.getElementById("profilePicInput").click()}
@@ -48,7 +43,6 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
             />
           </div>
 
-          {/* Hidden file input */}
           <input
             id="profilePicInput"
             type="file"
@@ -57,7 +51,6 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
             onChange={handleProfilePicUpload}
           />
 
-          {/* Username */}
           <div>
             <div className="wa-username">{currentUser.username}</div>
             <div className="wa-status">Online</div>
@@ -66,12 +59,10 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
         </div>
       </div>
 
-      {/* ⭐ Search Bar */}
       <div className="wa-search">
         <input placeholder="Search or start new chat" />
       </div>
 
-      {/* ⭐ Users List */}
       <div className="wa-list">
         {users
           .filter((u) => u.username !== currentUser.username)
