@@ -3,29 +3,25 @@ import React, {
   useState,
   forwardRef,
   useImperativeHandle,
-  useEffect
+  useEffect,
 } from "react";
 
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
-  // TODO: add your TURN server here in future for better reliability
-  // {
-  //   urls: "turn:YOUR_TURN_URL:3478",
-  //   username: "TURN_USER",
-  //   credential: "TURN_PASS"
-  // }
 ];
 
 const DEFAULT_VIDEO_CONSTRAINTS = {
   audio: true,
   video: {
-    width: { ideal: 1280, max: 1280 },  // HD-ish
+    width: { ideal: 1280, max: 1280 },
     height: { ideal: 720, max: 720 },
-    frameRate: { ideal: 24, max: 30 }
-  }
+    frameRate: { ideal: 24, max: 30 },
+  },
 };
 
-// Format duration in mm:ss
+// -------------------------------------------
+//  Duration formatter
+// -------------------------------------------
 const formatDuration = (secs) => {
   const m = Math.floor(secs / 60)
     .toString()
@@ -35,33 +31,37 @@ const formatDuration = (secs) => {
 };
 
 const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
+  // Video refs
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+
+  // WebRTC
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const pendingOfferRef = useRef(null);
+  const candidateQueue = useRef([]); // ⭐ FIX — queue ICE candidates
 
+  // Ringtone
   const ringtoneRef = useRef(null);
+
+  // Timer
   const durationTimerRef = useRef(null);
 
-  const [callState, setCallState] = useState("idle");       // idle | calling | incoming | in-call
+  // UI State
+  const [callState, setCallState] = useState("idle"); // idle | calling | incoming | in-call
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
-  const [duration, setDuration] = useState(0);              // in seconds
+  const [duration, setDuration] = useState(0);
 
-  // Load ringtone once
+  // Load ringtone
   useEffect(() => {
     ringtoneRef.current = new Audio("/ringtone.mp3");
-    if (ringtoneRef.current) {
-      ringtoneRef.current.loop = true;
-      ringtoneRef.current.preload = "auto";
-    }
+    ringtoneRef.current.loop = true;
 
     return () => {
-      cleanupCall();
       stopRingtone();
+      cleanupCall();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Call duration timer
@@ -71,62 +71,51 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         setDuration((d) => d + 1);
       }, 1000);
     } else {
-      if (durationTimerRef.current) {
-        clearInterval(durationTimerRef.current);
-        durationTimerRef.current = null;
-      }
-      if (callState === "idle") {
-        setDuration(0);
-      }
+      clearInterval(durationTimerRef.current);
+      durationTimerRef.current = null;
+      if (callState === "idle") setDuration(0);
     }
-    return () => {
-      if (durationTimerRef.current) {
-        clearInterval(durationTimerRef.current);
-        durationTimerRef.current = null;
-      }
-    };
   }, [callState]);
 
-  // Helpers: ringtone
+  // -------------------------------------------
+  // Ringtones
+  // -------------------------------------------
   const playRingtone = () => {
     try {
-      if (ringtoneRef.current) {
-        ringtoneRef.current.currentTime = 0;
-        ringtoneRef.current.play().catch(() => {});
-      }
-    } catch {
-      // ignore
-    }
+      ringtoneRef.current.currentTime = 0;
+      ringtoneRef.current.play().catch(() => {});
+    } catch {}
   };
 
   const stopRingtone = () => {
     try {
-      if (ringtoneRef.current) {
-        ringtoneRef.current.pause();
-        ringtoneRef.current.currentTime = 0;
-      }
-    } catch {
-      // ignore
-    }
+      ringtoneRef.current.pause();
+      ringtoneRef.current.currentTime = 0;
+    } catch {}
   };
 
-  // ✅ STOMP signaling using publish
+  // -------------------------------------------
+  // STOMP signaling
+  // -------------------------------------------
   const sendSignal = (msg) => {
     try {
       const client = window.stompClient;
-      if (client && client.connected) {
+      if (client?.connected) {
         client.publish({
           destination: "/app/call",
           body: JSON.stringify(msg),
         });
       } else {
-        console.error("WebSocket STOMP not connected");
+        console.error("STOMP not connected");
       }
     } catch (e) {
       console.error("sendSignal error", e);
     }
   };
 
+  // -------------------------------------------
+  // Local camera stream
+  // -------------------------------------------
   const startLocalStream = async () => {
     const stream = await navigator.mediaDevices.getUserMedia(
       DEFAULT_VIDEO_CONSTRAINTS
@@ -140,6 +129,9 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     return stream;
   };
 
+  // -------------------------------------------
+  // Create WebRTC peer connection
+  // -------------------------------------------
   const createPeerConnection = () => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
@@ -155,13 +147,10 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     };
 
     pc.ontrack = (event) => {
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
-      }
+      remoteVideoRef.current.srcObject = event.streams[0];
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log("ICE state:", pc.iceConnectionState);
       if (
         pc.iceConnectionState === "failed" ||
         pc.iceConnectionState === "disconnected"
@@ -170,18 +159,18 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
       }
     };
 
-    // Add local tracks
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current);
-      });
-    }
+    // Add tracks
+    localStreamRef.current?.getTracks().forEach((track) => {
+      pc.addTrack(track, localStreamRef.current);
+    });
 
     pcRef.current = pc;
     return pc;
   };
 
-  // Outgoing: start call
+  // -------------------------------------------
+  // Caller: Start call
+  // -------------------------------------------
   const startCallAsCaller = async () => {
     try {
       setCallState("calling");
@@ -204,14 +193,16 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     }
   };
 
-  // Incoming: we got OFFER, but we don't auto-accept
+  // -------------------------------------------
+  // Incoming OFFER
+  // -------------------------------------------
   const handleIncomingOffer = (msg) => {
     pendingOfferRef.current = msg;
-    setCallState("incoming");
     playRingtone();
+    setCallState("incoming");
   };
 
-  // When user clicks ACCEPT
+  // Accept call
   const acceptIncomingCall = async () => {
     stopRingtone();
     const offerMsg = pendingOfferRef.current;
@@ -221,10 +212,16 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
       await startLocalStream();
       const pc = createPeerConnection();
 
-      await pc.setRemoteDescription({
+      await pc.setRemoteDescription(new RTCSessionDescription({
         type: "offer",
         sdp: offerMsg.sdp,
-      });
+      }));
+
+      // ⭐ Apply queued ICE candidates now
+      for (const c of candidateQueue.current) {
+        await pc.addIceCandidate(c);
+      }
+      candidateQueue.current = [];
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -243,7 +240,7 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     }
   };
 
-  // When user clicks REJECT
+  // Reject call
   const rejectIncomingCall = () => {
     const offerMsg = pendingOfferRef.current;
     if (offerMsg) {
@@ -255,53 +252,76 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     }
     stopRingtone();
     pendingOfferRef.current = null;
-    cleanupCall();
-    setCallState("idle");
-    if (onClose) onClose();
+    hangup(false);
   };
 
-  // Caller side: got ANSWER
+  // -------------------------------------------
+  // Caller receives ANSWER
+  // -------------------------------------------
   const handleAnswer = async (msg) => {
     try {
-      if (!pcRef.current) return;
-      await pcRef.current.setRemoteDescription({
-        type: "answer",
-        sdp: msg.sdp,
-      });
+      const pc = pcRef.current;
+      if (!pc) return;
+
+      await pc.setRemoteDescription(
+        new RTCSessionDescription({ type: "answer", sdp: msg.sdp })
+      );
+
+      // ⭐ Apply queued ICE candidates now
+      for (const c of candidateQueue.current) {
+        await pc.addIceCandidate(c);
+      }
+      candidateQueue.current = [];
+
       setCallState("in-call");
     } catch (e) {
       console.error("handleAnswer error", e);
     }
   };
 
-  // Handle candidate both sides
+  // -------------------------------------------
+  // ICE Candidate Handler
+  // -------------------------------------------
   const handleCandidate = async (msg) => {
+    const candidate = msg.candidate;
+    if (!candidate) return;
+
+    const pc = pcRef.current;
+
+    // ⭐ IMPORTANT — remoteDescription not ready, queue it
+    if (!pc || !pc.remoteDescription) {
+      console.log("⏳ Queuing ICE candidate");
+      candidateQueue.current.push(candidate);
+      return;
+    }
+
     try {
-      if (!pcRef.current || !msg.candidate) return;
-      await pcRef.current.addIceCandidate(msg.candidate);
+      await pc.addIceCandidate(candidate);
     } catch (e) {
-      console.warn("addIceCandidate error:", e);
+      console.warn("addIceCandidate error", e);
     }
   };
 
+  // -------------------------------------------
+  // Clean everything
+  // -------------------------------------------
   const cleanupCall = () => {
     try {
-      if (pcRef.current) {
-        pcRef.current.close();
-      }
-    } catch (e) {
-      console.warn("pc close error:", e);
-    }
+      pcRef.current?.close();
+    } catch {}
+
     pcRef.current = null;
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
-    }
+    try {
+      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    } catch {}
+
+    localStreamRef.current = null;
 
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
 
+    candidateQueue.current = [];
     setMuted(false);
     setCameraOff(false);
   };
@@ -319,55 +339,42 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
 
     cleanupCall();
     setCallState("idle");
-    if (onClose) onClose();
+    onClose?.();
   };
 
-  const toggleMute = () => {
-    if (!localStreamRef.current) return;
-    localStreamRef.current.getAudioTracks().forEach((t) => {
-      t.enabled = !t.enabled;
-    });
-    setMuted((prev) => !prev);
-  };
-
-  const toggleCamera = () => {
-    if (!localStreamRef.current) return;
-    localStreamRef.current.getVideoTracks().forEach((t) => {
-      t.enabled = !t.enabled;
-    });
-    setCameraOff((prev) => !prev);
-  };
-
-  // Parent passes WebSocket signals here
+  // -------------------------------------------
+  // Expose signal handler to parent
+  // -------------------------------------------
   useImperativeHandle(ref, () => ({
     async handleSignal(signal) {
       switch (signal.type) {
         case "offer":
           handleIncomingOffer(signal);
           break;
+
         case "answer":
-          await handleAnswer(signal);
+          handleAnswer(signal);
           break;
+
         case "candidate":
-          await handleCandidate(signal);
+          handleCandidate(signal);
           break;
+
         case "hangup":
           hangup(false);
           break;
+
         case "reject":
-          // peer rejected the call
-          cleanupCall();
-          setCallState("idle");
-          if (onClose) onClose();
+          hangup(false);
           break;
+
         default:
-          console.warn("Unknown signal type:", signal.type);
-          break;
+          console.warn("Unknown signal:", signal.type);
       }
     },
   }));
 
-  // UI
+  // UI label
   const statusText = (() => {
     switch (callState) {
       case "calling":
@@ -375,59 +382,54 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
       case "incoming":
         return `📳 Incoming call from ${targetUser}`;
       case "in-call":
-        return `In call with ${targetUser} • ${formatDuration(duration)}`;
+        return `In call • ${formatDuration(duration)}`;
       default:
         return "";
     }
   })();
 
+  // -------------------------------------------
+  // UI
+  // -------------------------------------------
   return (
-    <div style={{ height: "100%", padding: 10, background: "#111", color: "#fff" }}>
+    <div style={{ height: "100%", background: "#111", color: "#fff", padding: 10 }}>
       {/* VIDEO AREA */}
-      <div
-        style={{
-          display: "flex",
-          height: "80%",
-          position: "relative",
-        }}
-      >
-        {/* REMOTE VIDEO FULL AREA */}
-        <div style={{ flex: 1, position: "relative", background: "black" }}>
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              borderRadius: 8,
-              background: "black",
-            }}
-          />
-          {/* LOCAL PIP PREVIEW */}
-          <video
-            ref={localVideoRef}
-            autoPlay
-            muted
-            playsInline
-            style={{
-              position: "absolute",
-              bottom: 10,
-              right: 10,
-              width: 160,
-              height: 120,
-              objectFit: "cover",
-              borderRadius: 8,
-              border: "2px solid #fff",
-              background: "#222",
-            }}
-          />
-        </div>
+      <div style={{ height: "80%", position: "relative" }}>
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            background: "black",
+            borderRadius: 8,
+          }}
+        />
+
+        {/* Local PIP */}
+        <video
+          ref={localVideoRef}
+          autoPlay
+          muted
+          playsInline
+          style={{
+            position: "absolute",
+            bottom: 10,
+            right: 10,
+            width: 150,
+            height: 120,
+            borderRadius: 8,
+            border: "2px solid white",
+            background: "#222",
+            objectFit: "cover",
+          }}
+        />
       </div>
 
-      {/* CONTROLS AREA */}
-      <div style={{ marginTop: 10 }}>
+      {/* CONTROLS */}
+      <div style={{ marginTop: 15 }}>
         <div style={{ marginBottom: 8 }}>{statusText}</div>
 
         {callState === "idle" && (
@@ -435,15 +437,13 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         )}
 
         {callState === "calling" && (
-          <>
-            <button onClick={() => hangup(true)}>Cancel</button>
-          </>
+          <button onClick={() => hangup(true)}>Cancel Call</button>
         )}
 
         {callState === "incoming" && (
           <>
             <button onClick={acceptIncomingCall}>Accept</button>
-            <button onClick={rejectIncomingCall} style={{ marginLeft: 8 }}>
+            <button onClick={rejectIncomingCall} style={{ marginLeft: 10 }}>
               Reject
             </button>
           </>
