@@ -7,11 +7,8 @@ import React, {
 } from "react";
 
 /**
- * Notes:
- * - Replace YOUR_TURN_URL, TURN_USER, TURN_PASS with your Coturn / provider values.
- * - Ensure server signaling endpoint ("/app/call") matches backend.
+ * TURN + STUN servers (update with your Coturn details)
  */
-
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   {
@@ -36,23 +33,24 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const candidateQueue = useRef([]);
-  const [callState, setCallState] = useState("idle"); // idle, calling, ringing, in-call
+  const [callState, setCallState] = useState("idle");
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
 
   useEffect(() => {
-    // cleanup on unmount
     return () => cleanupCall();
   }, []);
 
-  // Send signaling to backend via STOMP
+  // ⭐ FIXED SIGNALING (use publish, NOT send)
   const sendSignal = (msg) => {
     try {
       if (window.stompClient?.connected) {
-        // Using same endpoint you used previously
-        window.stompClient.send("/app/call", {}, JSON.stringify(msg));
+        window.stompClient.publish({
+          destination: "/app/call",
+          body: JSON.stringify(msg)
+        });
       } else {
-        console.error("WebSocket STOMP not connected");
+        console.error("WebSocket not connected");
       }
     } catch (e) {
       console.error("sendSignal error", e);
@@ -64,25 +62,6 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     localStreamRef.current = stream;
     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     return stream;
-  };
-
-  const applyVideoBitrateCap = async (pc, kbps = 900) => {
-    // apply to first video sender if present (Chrome-support)
-    try {
-      const senders = pc.getSenders ? pc.getSenders() : [];
-      const videoSender = senders.find(s => s.track && s.track.kind === "video");
-      if (videoSender && videoSender.getParameters) {
-        let params = videoSender.getParameters();
-        if (!params.encodings) params.encodings = [{}];
-        // set max bitrate in bps
-        params.encodings[0].maxBitrate = kbps * 1000;
-        await videoSender.setParameters(params);
-        console.log("Applied video bitrate cap:", kbps, "kbps");
-      }
-    } catch (e) {
-      // non-fatal: some browsers don't support setParameters for bitrate
-      console.warn("Could not set sender bitrate:", e);
-    }
   };
 
   const createPeerConnection = () => {
@@ -100,27 +79,9 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     };
 
     pc.ontrack = (event) => {
-      // if multiple tracks, streams[0] is common
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
     };
 
-    pc.onconnectionstatechange = () => {
-      console.log("PC connectionState:", pc.connectionState);
-      if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-        // attempt graceful cleanup
-        hangup(true);
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log("PC iceConnectionState:", pc.iceConnectionState);
-      if (pc.iceConnectionState === "failed") {
-        // try restart or cleanup
-        hangup(true);
-      }
-    };
-
-    // Add local tracks (if already captured)
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
         pc.addTrack(track, localStreamRef.current);
@@ -128,18 +89,6 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     }
 
     pcRef.current = pc;
-
-    // Apply queued ICE candidates
-    if (candidateQueue.current.length) {
-      candidateQueue.current.forEach(async (c) => {
-        try {
-          await pc.addIceCandidate(c);
-        } catch (e) {
-          console.warn("late candidate add failed:", e);
-        }
-      });
-      candidateQueue.current = [];
-    }
 
     return pc;
   };
@@ -149,18 +98,10 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     try {
       setCallState("calling");
       await startLocalStream();
+
       const pc = createPeerConnection();
-      await applyVideoBitrateCap(pc, 900); // set ~900 kbps cap (adjust as needed)
-
-      // ensure tracks are added before creating offer
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((t) => {
-          // if sender already added, skip else add
-          // we added in createPeerConnection already
-        });
-      }
-
       const offer = await pc.createOffer();
+
       await pc.setLocalDescription(offer);
 
       sendSignal({
@@ -170,8 +111,11 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         sdp: offer.sdp
       });
 
-      // optional: send ring event
-      sendSignal({ type: "ring", from: currentUser.username, to: targetUser });
+      sendSignal({
+        type: "ring",
+        from: currentUser.username,
+        to: targetUser
+      });
     } catch (e) {
       console.error("startCallAsCaller error", e);
       hangup(false);
@@ -185,15 +129,10 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
       await startLocalStream();
       const pc = createPeerConnection();
 
-      // set remote description
       await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
 
-      // create and set answer
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-
-      // apply bitrate cap after local description
-      await applyVideoBitrateCap(pc, 900);
 
       sendSignal({
         type: "answer",
@@ -220,51 +159,34 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     }
   };
 
-  // Both → handle ICE candidate
+  // ICE candidate
   const handleCandidate = async (msg) => {
     if (!msg.candidate) return;
-
-    const ice = msg.candidate;
-    // If pc not ready, queue
-    if (!pcRef.current) {
-      candidateQueue.current.push(ice);
-      return;
-    }
+    if (!pcRef.current) return;
 
     try {
-      await pcRef.current.addIceCandidate(ice);
+      await pcRef.current.addIceCandidate(msg.candidate);
     } catch (e) {
-      console.warn("addIceCandidate error:", e);
+      console.warn("ICE add error:", e);
     }
   };
 
   const cleanupCall = () => {
-    try {
-      if (pcRef.current) {
-        pcRef.current.close();
-        pcRef.current = null;
-      }
-    } catch (e) {
-      console.warn("pc close error", e);
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
     }
-
-    try {
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((t) => t.stop());
-        localStreamRef.current = null;
-      }
-    } catch (e) {
-      console.warn("stop tracks error", e);
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
     }
-
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-    candidateQueue.current = [];
+
     setMuted(false);
     setCameraOff(false);
   };
 
-  // End call (notify peer by default)
   const hangup = (notify = true) => {
     if (notify) {
       sendSignal({
@@ -273,30 +195,27 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         to: targetUser
       });
     }
+
     cleanupCall();
     setCallState("idle");
     if (onClose) onClose();
   };
 
-  // Mute toggle
   const toggleMute = () => {
     if (!localStreamRef.current) return;
     const audioTracks = localStreamRef.current.getAudioTracks();
-    if (audioTracks.length === 0) return;
-    audioTracks.forEach(t => (t.enabled = !t.enabled));
-    setMuted(prev => !prev);
+    audioTracks.forEach((t) => (t.enabled = !t.enabled));
+    setMuted((p) => !p);
   };
 
-  // Camera toggle
   const toggleCamera = () => {
     if (!localStreamRef.current) return;
     const videoTracks = localStreamRef.current.getVideoTracks();
-    if (videoTracks.length === 0) return;
-    videoTracks.forEach(t => (t.enabled = !t.enabled));
-    setCameraOff(prev => !prev);
+    videoTracks.forEach((t) => (t.enabled = !t.enabled));
+    setCameraOff((p) => !p);
   };
 
-  // Expose handler to parent for incoming signaling
+  // Listen for remote signals  
   useImperativeHandle(ref, () => ({
     async handleSignal(signal) {
       switch (signal.type) {
@@ -310,16 +229,8 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
           await handleCandidate(signal);
           break;
         case "hangup":
-          // peer hung up
-          cleanupCall();
-          setCallState("idle");
-          if (onClose) onClose();
+          hangup(false);
           break;
-        case "ring":
-          // optional: play ringtone / notify UI
-          break;
-        default:
-          console.warn("Unknown signal type:", signal.type);
       }
     }
   }));
@@ -334,6 +245,7 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
           playsInline
           style={{ width: 180, height: 140, background: "#222" }}
         />
+
         <video
           ref={remoteVideoRef}
           autoPlay
