@@ -8,7 +8,7 @@ import React, {
 
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
-  // TODO: replace with your real TURN later
+  // TODO: add your TURN server here in future for better reliability
   // {
   //   urls: "turn:YOUR_TURN_URL:3478",
   //   username: "TURN_USER",
@@ -19,10 +19,19 @@ const ICE_SERVERS = [
 const DEFAULT_VIDEO_CONSTRAINTS = {
   audio: true,
   video: {
-    width: { ideal: 640, max: 720 },
-    height: { ideal: 480, max: 720 },
+    width: { ideal: 1280, max: 1280 },  // HD-ish
+    height: { ideal: 720, max: 720 },
     frameRate: { ideal: 24, max: 30 }
   }
+};
+
+// Format duration in mm:ss
+const formatDuration = (secs) => {
+  const m = Math.floor(secs / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = (secs % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
 };
 
 const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
@@ -30,18 +39,78 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
   const remoteVideoRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
+  const pendingOfferRef = useRef(null);
 
-  const [callState, setCallState] = useState("idle"); // idle | calling | ringing | in-call
+  const ringtoneRef = useRef(null);
+  const durationTimerRef = useRef(null);
+
+  const [callState, setCallState] = useState("idle");       // idle | calling | incoming | in-call
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
+  const [duration, setDuration] = useState(0);              // in seconds
 
-  // Cleanup on unmount
+  // Load ringtone once
   useEffect(() => {
-    return () => cleanupCall();
+    ringtoneRef.current = new Audio("/ringtone.mp3");
+    if (ringtoneRef.current) {
+      ringtoneRef.current.loop = true;
+      ringtoneRef.current.preload = "auto";
+    }
+
+    return () => {
+      cleanupCall();
+      stopRingtone();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ STOMP signaling using publish (NOT send)
+  // Call duration timer
+  useEffect(() => {
+    if (callState === "in-call") {
+      durationTimerRef.current = setInterval(() => {
+        setDuration((d) => d + 1);
+      }, 1000);
+    } else {
+      if (durationTimerRef.current) {
+        clearInterval(durationTimerRef.current);
+        durationTimerRef.current = null;
+      }
+      if (callState === "idle") {
+        setDuration(0);
+      }
+    }
+    return () => {
+      if (durationTimerRef.current) {
+        clearInterval(durationTimerRef.current);
+        durationTimerRef.current = null;
+      }
+    };
+  }, [callState]);
+
+  // Helpers: ringtone
+  const playRingtone = () => {
+    try {
+      if (ringtoneRef.current) {
+        ringtoneRef.current.currentTime = 0;
+        ringtoneRef.current.play().catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const stopRingtone = () => {
+    try {
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // ✅ STOMP signaling using publish
   const sendSignal = (msg) => {
     try {
       const client = window.stompClient;
@@ -93,7 +162,10 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
 
     pc.oniceconnectionstatechange = () => {
       console.log("ICE state:", pc.iceConnectionState);
-      if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
+      if (
+        pc.iceConnectionState === "failed" ||
+        pc.iceConnectionState === "disconnected"
+      ) {
         hangup(true);
       }
     };
@@ -109,7 +181,7 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     return pc;
   };
 
-  // Caller → create offer and send
+  // Outgoing: start call
   const startCallAsCaller = async () => {
     try {
       setCallState("calling");
@@ -132,15 +204,27 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     }
   };
 
-  // Receiver → handle offer → create answer
-  const handleOffer = async (msg) => {
-    try {
-      setCallState("ringing");
+  // Incoming: we got OFFER, but we don't auto-accept
+  const handleIncomingOffer = (msg) => {
+    pendingOfferRef.current = msg;
+    setCallState("incoming");
+    playRingtone();
+  };
 
+  // When user clicks ACCEPT
+  const acceptIncomingCall = async () => {
+    stopRingtone();
+    const offerMsg = pendingOfferRef.current;
+    if (!offerMsg) return;
+
+    try {
       await startLocalStream();
       const pc = createPeerConnection();
 
-      await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
+      await pc.setRemoteDescription({
+        type: "offer",
+        sdp: offerMsg.sdp,
+      });
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -148,18 +232,35 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
       sendSignal({
         type: "answer",
         from: currentUser.username,
-        to: msg.from,
+        to: offerMsg.from,
         sdp: answer.sdp,
       });
 
       setCallState("in-call");
     } catch (e) {
-      console.error("handleOffer error", e);
+      console.error("acceptIncomingCall error", e);
       hangup(false);
     }
   };
 
-  // Caller → handle answer
+  // When user clicks REJECT
+  const rejectIncomingCall = () => {
+    const offerMsg = pendingOfferRef.current;
+    if (offerMsg) {
+      sendSignal({
+        type: "reject",
+        from: currentUser.username,
+        to: offerMsg.from,
+      });
+    }
+    stopRingtone();
+    pendingOfferRef.current = null;
+    cleanupCall();
+    setCallState("idle");
+    if (onClose) onClose();
+  };
+
+  // Caller side: got ANSWER
   const handleAnswer = async (msg) => {
     try {
       if (!pcRef.current) return;
@@ -173,7 +274,7 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     }
   };
 
-  // Both → handle ICE candidate
+  // Handle candidate both sides
   const handleCandidate = async (msg) => {
     try {
       if (!pcRef.current || !msg.candidate) return;
@@ -206,6 +307,8 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
   };
 
   const hangup = (notify = true) => {
+    stopRingtone();
+
     if (notify) {
       sendSignal({
         type: "hangup",
@@ -235,12 +338,12 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     setCameraOff((prev) => !prev);
   };
 
-  // Parent passes signals from WebSocket here
+  // Parent passes WebSocket signals here
   useImperativeHandle(ref, () => ({
     async handleSignal(signal) {
       switch (signal.type) {
         case "offer":
-          await handleOffer(signal);
+          handleIncomingOffer(signal);
           break;
         case "answer":
           await handleAnswer(signal);
@@ -251,6 +354,12 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         case "hangup":
           hangup(false);
           break;
+        case "reject":
+          // peer rejected the call
+          cleanupCall();
+          setCallState("idle");
+          if (onClose) onClose();
+          break;
         default:
           console.warn("Unknown signal type:", signal.type);
           break;
@@ -258,41 +367,95 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     },
   }));
 
+  // UI
+  const statusText = (() => {
+    switch (callState) {
+      case "calling":
+        return `📞 Calling ${targetUser}...`;
+      case "incoming":
+        return `📳 Incoming call from ${targetUser}`;
+      case "in-call":
+        return `In call with ${targetUser} • ${formatDuration(duration)}`;
+      default:
+        return "";
+    }
+  })();
+
   return (
     <div style={{ height: "100%", padding: 10, background: "#111", color: "#fff" }}>
-      <div style={{ display: "flex", height: "80%" }}>
-        <video
-          ref={localVideoRef}
-          autoPlay
-          muted
-          playsInline
-          style={{ width: 180, height: 140, background: "#222" }}
-        />
-        <video
-          ref={remoteVideoRef}
-          autoPlay
-          playsInline
-          style={{
-            flex: 1,
-            background: "black",
-            marginLeft: 10,
-          }}
-        />
+      {/* VIDEO AREA */}
+      <div
+        style={{
+          display: "flex",
+          height: "80%",
+          position: "relative",
+        }}
+      >
+        {/* REMOTE VIDEO FULL AREA */}
+        <div style={{ flex: 1, position: "relative", background: "black" }}>
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              borderRadius: 8,
+              background: "black",
+            }}
+          />
+          {/* LOCAL PIP PREVIEW */}
+          <video
+            ref={localVideoRef}
+            autoPlay
+            muted
+            playsInline
+            style={{
+              position: "absolute",
+              bottom: 10,
+              right: 10,
+              width: 160,
+              height: 120,
+              objectFit: "cover",
+              borderRadius: 8,
+              border: "2px solid #fff",
+              background: "#222",
+            }}
+          />
+        </div>
       </div>
 
+      {/* CONTROLS AREA */}
       <div style={{ marginTop: 10 }}>
+        <div style={{ marginBottom: 8 }}>{statusText}</div>
+
         {callState === "idle" && (
           <button onClick={startCallAsCaller}>Call {targetUser}</button>
         )}
 
-        {callState === "calling" && <span>📞 Calling...</span>}
-        {callState === "ringing" && <span>📳 Incoming call...</span>}
+        {callState === "calling" && (
+          <>
+            <button onClick={() => hangup(true)}>Cancel</button>
+          </>
+        )}
+
+        {callState === "incoming" && (
+          <>
+            <button onClick={acceptIncomingCall}>Accept</button>
+            <button onClick={rejectIncomingCall} style={{ marginLeft: 8 }}>
+              Reject
+            </button>
+          </>
+        )}
 
         {callState === "in-call" && (
           <>
             <button onClick={() => hangup(true)}>Hang Up</button>
-            <button onClick={toggleMute}>{muted ? "Unmute" : "Mute"}</button>
-            <button onClick={toggleCamera}>
+            <button onClick={toggleMute} style={{ marginLeft: 8 }}>
+              {muted ? "Unmute" : "Mute"}
+            </button>
+            <button onClick={toggleCamera} style={{ marginLeft: 8 }}>
               {cameraOff ? "Camera On" : "Camera Off"}
             </button>
           </>
