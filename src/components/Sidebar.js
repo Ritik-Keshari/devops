@@ -3,6 +3,7 @@ import { uploadProfilePicture } from "../utils/fileUpload";
 
 const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUser }) => {
 
+  // Upload profile picture
   const handleProfilePicUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -17,20 +18,60 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
     }
   };
 
-  // ⭐ FIXED — removed "normal"
+  // ⭐ FINAL FIX — Avatar always forced 60x60 or 45x45
   const Avatar = ({ url, letter, size = "" }) => {
+    const baseStyle = {
+      borderRadius: "50%",
+      objectFit: "cover",
+      display: "block",
+    };
+
+    // Different size for main profile vs userlist
+    const sizeStyle =
+      size === "small"
+        ? { width: 45, height: 45 }
+        : { width: 60, height: 60 };
+
+    // If image exists
     if (url) {
-      return <img src={url} className={`wa-avatar-img ${size}`} alt="avatar" />;
+      return (
+        <img
+          src={url}
+          alt="avatar"
+          className={`wa-avatar-img ${size}`}
+          style={{ ...baseStyle, ...sizeStyle }}   // ⭐ HARD ENFORCED
+        />
+      );
     }
-    return <div className={`wa-avatar ${size}`}>{letter}</div>;
+
+    // Fallback letter avatar
+    return (
+      <div
+        className={`wa-avatar ${size}`}
+        style={{
+          ...sizeStyle,
+          ...baseStyle,
+          background: "#ccc",
+          fontWeight: "bold",
+          justifyContent: "center",
+          alignItems: "center",
+          fontSize: size === "small" ? 18 : 24,
+          display: "flex",
+        }}
+      >
+        {letter}
+      </div>
+    );
   };
 
   return (
     <aside className="wa-sidebar">
 
+      {/* TOP SECTION */}
       <div className="wa-top">
         <div className="wa-profile">
 
+          {/* Click to Upload */}
           <div
             className="wa-avatar-wrapper"
             onClick={() => document.getElementById("profilePicInput").click()}
@@ -43,6 +84,7 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
             />
           </div>
 
+          {/* Hidden file picker */}
           <input
             id="profilePicInput"
             type="file"
@@ -59,10 +101,12 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
         </div>
       </div>
 
+      {/* Search bar */}
       <div className="wa-search">
         <input placeholder="Search or start new chat" />
       </div>
 
+      {/* User list */}
       <div className="wa-list">
         {users
           .filter((u) => u.username !== currentUser.username)
