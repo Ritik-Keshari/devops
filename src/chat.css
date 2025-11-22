@@ -30,7 +30,47 @@
   border-right: 1px solid #eee;
 }
 
+/* ================================ */
+/* ⭐ PROFILE AVATAR FIX — important */
+/* ================================ */
+
+/* Normal avatar (sidebar top) */
+.wa-avatar-img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Smaller avatar (user list) */
+.wa-avatar-img.small {
+  width: 45px;
+  height: 45px;
+}
+
+/* Fallback text avatar */
+.wa-avatar {
+  width: 60px;
+  height: 60px;
+  background: #ccc;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.wa-avatar.small {
+  width: 45px;
+  height: 45px;
+  font-size: 18px;
+}
+
+/* ================================ */
 /* FILE UPLOAD BUTTON */
+/* ================================ */
+
 .file-upload-btn {
   font-size: 20px;
   margin-right: 10px;
