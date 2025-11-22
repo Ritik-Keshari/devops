@@ -8,8 +8,11 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
     const file = e.target.files[0];
     if (!file) return;
 
+    // Upload to backend (Azure Blob)
     const url = await uploadProfilePicture(file, currentUser.username);
+
     if (url) {
+      // Update UI instantly
       setCurrentUser((prev) => ({
         ...prev,
         profileImageUrl: url,
@@ -17,25 +20,27 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
     }
   };
 
-  // ⭐ Fallback Avatar
+  // ⭐ Avatar component with fallback letter
   const Avatar = ({ url, letter, size = "normal" }) => {
     if (url) {
-      return <img src={url} className={`wa-avatar-img ${size}`} alt="" />;
+      return <img src={url} className={`wa-avatar-img ${size}`} alt="avatar" />;
     }
     return <div className={`wa-avatar ${size}`}>{letter}</div>;
   };
 
   return (
     <aside className="wa-sidebar">
-      {/* TOP PROFILE SECTION */}
+
+      {/* ⭐ TOP PROFILE SECTION */}
       <div className="wa-top">
         <div className="wa-profile">
 
-          {/* ⭐ Profile Picture */}
+          {/* ⭐ Profile Picture (click to upload) */}
           <div
             className="wa-avatar-wrapper"
             onClick={() => document.getElementById("profilePicInput").click()}
             style={{ cursor: "pointer" }}
+            title="Click to change profile picture"
           >
             <Avatar
               url={currentUser.profileImageUrl}
@@ -43,6 +48,7 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
             />
           </div>
 
+          {/* Hidden file input */}
           <input
             id="profilePicInput"
             type="file"
@@ -51,7 +57,7 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
             onChange={handleProfilePicUpload}
           />
 
-          {/* Name + Status */}
+          {/* Username */}
           <div>
             <div className="wa-username">{currentUser.username}</div>
             <div className="wa-status">Online</div>
@@ -60,12 +66,12 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
         </div>
       </div>
 
-      {/* SEARCH BAR */}
+      {/* ⭐ Search Bar */}
       <div className="wa-search">
         <input placeholder="Search or start new chat" />
       </div>
 
-      {/* USERS LIST */}
+      {/* ⭐ Users List */}
       <div className="wa-list">
         {users
           .filter((u) => u.username !== currentUser.username)
@@ -73,7 +79,7 @@ const Sidebar = ({ users, currentUser, selectedUser, onSelectUser, setCurrentUse
             <div
               key={u.username}
               className={`wa-user ${selectedUser?.username === u.username ? "active" : ""}`}
-              onClick={() => onSelectUser(u)}  // ⭐ Full user object passed correctly
+              onClick={() => onSelectUser(u)}
             >
               <div className="wa-user-left">
                 <Avatar
