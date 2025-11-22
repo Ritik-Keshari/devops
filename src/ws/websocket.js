@@ -13,27 +13,29 @@ export const connectWebSocket = (username, onMessageReceived) => {
     return;
   }
 
-  const socket = new SockJS(Config.WS);   // ⭐ FIXED (no query params)
+  // ⭐ FIX: Pass username inside WebSocket URL (this is what makes backend detect it)
+  const socket = new SockJS(`${Config.WS}?username=${username}`);
 
   stompClient = new Client({
     webSocketFactory: () => socket,
 
-    connectHeaders: {                     // ⭐ FIXED (pass username correctly)
+    // Still sending headers (no harm)
+    connectHeaders: {
       username: username
     },
 
-    reconnectDelay: 5000,                 // auto reconnect
+    reconnectDelay: 5000,
 
     onConnect: () => {
       console.log("WebSocket connected as:", username);
 
-      // ⭐ NORMAL PRIVATE MESSAGES
+      // ⭐ PRIVATE CHAT MESSAGES
       stompClient.subscribe(`/user/queue/messages`, (message) => {
         const msg = JSON.parse(message.body);
         onMessageReceived(msg);
       });
 
-      // ⭐ VIDEO CALL SIGNALING
+      // ⭐ VIDEO CALL SIGNALS
       stompClient.subscribe(`/user/queue/call`, (message) => {
         const signal = JSON.parse(message.body);
         console.log("CALL SIGNAL RECEIVED:", signal);
@@ -44,13 +46,11 @@ export const connectWebSocket = (username, onMessageReceived) => {
       });
     },
 
-    // On STOMP protocol error
     onStompError: (frame) => {
       console.error("STOMP error:", frame.headers["message"]);
       console.error("Details:", frame.body);
     },
 
-    // WebSocket closing
     onWebSocketClose: () => {
       console.warn("WebSocket closed");
     },
