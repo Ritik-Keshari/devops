@@ -122,7 +122,9 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     };
 
     pc.ontrack = (event) => {
-      remoteVideoRef.current.srcObject = event.streams[0];
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
     };
 
     pc.oniceconnectionstatechange = () => {
@@ -184,8 +186,13 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         })
       );
 
+      // ⭐ remoteDescription is now set → flush queued candidates
       for (const c of candidateQueue.current) {
-        await pc.addIceCandidate(c);
+        try {
+          await pc.addIceCandidate(c);
+        } catch (err) {
+          console.warn("flush candidate (offer) failed:", err);
+        }
       }
       candidateQueue.current = [];
 
@@ -228,8 +235,13 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         new RTCSessionDescription({ type: "answer", sdp: msg.sdp })
       );
 
+      // ⭐ remoteDescription now set → flush queued candidates
       for (const c of candidateQueue.current) {
-        await pc.addIceCandidate(c);
+        try {
+          await pc.addIceCandidate(c);
+        } catch (err) {
+          console.warn("flush candidate (answer) failed:", err);
+        }
       }
       candidateQueue.current = [];
 
@@ -239,13 +251,20 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     }
   };
 
+  // ⭐ FIXED: robust candidate handling
   const handleCandidate = async (msg) => {
     const candidate = msg.candidate;
     if (!candidate) return;
 
     const pc = pcRef.current;
 
-    if (!pc || !pc.remoteDescription) {
+    // If PC not ready or remoteDescription not fully set → queue
+    if (
+      !pc ||
+      !pc.remoteDescription ||
+      !pc.remoteDescription.sdp
+    ) {
+      console.warn("⏳ Queuing ICE candidate, remoteDescription not ready");
       candidateQueue.current.push(candidate);
       return;
     }
@@ -254,6 +273,15 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
       await pc.addIceCandidate(candidate);
     } catch (e) {
       console.warn("addIceCandidate error:", e);
+
+      // If it's still a state error, queue again instead of dropping
+      if (
+        e.name === "InvalidStateError" ||
+        (typeof e.message === "string" &&
+          e.message.toLowerCase().includes("remote description"))
+      ) {
+        candidateQueue.current.push(candidate);
+      }
     }
   };
 
@@ -292,9 +320,6 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     onClose?.();
   };
 
-  // -------------------------
-  // MUTE + CAMERA FIXED
-  // -------------------------
   const toggleMute = () => {
     if (!localStreamRef.current) return;
     localStreamRef.current.getAudioTracks().forEach((t) => {
