@@ -7,7 +7,13 @@ import React, {
 } from "react";
 
 const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" }
+  { urls: "stun:stun.l.google.com:19302" },
+  // TODO: replace with your real TURN later
+  // {
+  //   urls: "turn:YOUR_TURN_URL:3478",
+  //   username: "TURN_USER",
+  //   credential: "TURN_PASS"
+  // }
 ];
 
 const DEFAULT_VIDEO_CONSTRAINTS = {
@@ -25,20 +31,25 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
 
-  const [callState, setCallState] = useState("idle"); 
+  const [callState, setCallState] = useState("idle"); // idle | calling | ringing | in-call
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => cleanupCall();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🔥 Send signaling via STOMP
+  // ✅ STOMP signaling using publish (NOT send)
   const sendSignal = (msg) => {
     try {
-      if (window.stompClient?.connected) {
-        window.stompClient.send("/app/call", {}, JSON.stringify(msg));
+      const client = window.stompClient;
+      if (client && client.connected) {
+        client.publish({
+          destination: "/app/call",
+          body: JSON.stringify(msg),
+        });
       } else {
         console.error("WebSocket STOMP not connected");
       }
@@ -48,7 +59,9 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
   };
 
   const startLocalStream = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia(DEFAULT_VIDEO_CONSTRAINTS);
+    const stream = await navigator.mediaDevices.getUserMedia(
+      DEFAULT_VIDEO_CONSTRAINTS
+    );
     localStreamRef.current = stream;
 
     if (localVideoRef.current) {
@@ -67,7 +80,7 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
           type: "candidate",
           from: currentUser.username,
           to: targetUser,
-          candidate: event.candidate
+          candidate: event.candidate,
         });
       }
     };
@@ -79,7 +92,8 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     };
 
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === "failed") {
+      console.log("ICE state:", pc.iceConnectionState);
+      if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
         hangup(true);
       }
     };
@@ -95,13 +109,12 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     return pc;
   };
 
-  // Caller → send offer
+  // Caller → create offer and send
   const startCallAsCaller = async () => {
     try {
       setCallState("calling");
 
       await startLocalStream();
-
       const pc = createPeerConnection();
 
       const offer = await pc.createOffer();
@@ -111,16 +124,15 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         type: "offer",
         from: currentUser.username,
         to: targetUser,
-        sdp: offer.sdp
+        sdp: offer.sdp,
       });
-
     } catch (e) {
       console.error("startCallAsCaller error", e);
       hangup(false);
     }
   };
 
-  // Receiver → handle offer → send answer
+  // Receiver → handle offer → create answer
   const handleOffer = async (msg) => {
     try {
       setCallState("ringing");
@@ -137,7 +149,7 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         type: "answer",
         from: currentUser.username,
         to: msg.from,
-        sdp: answer.sdp
+        sdp: answer.sdp,
       });
 
       setCallState("in-call");
@@ -151,18 +163,20 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
   const handleAnswer = async (msg) => {
     try {
       if (!pcRef.current) return;
-      await pcRef.current.setRemoteDescription({ type: "answer", sdp: msg.sdp });
+      await pcRef.current.setRemoteDescription({
+        type: "answer",
+        sdp: msg.sdp,
+      });
       setCallState("in-call");
     } catch (e) {
       console.error("handleAnswer error", e);
     }
   };
 
-  // Handle ICE candidates
+  // Both → handle ICE candidate
   const handleCandidate = async (msg) => {
-    if (!pcRef.current || !msg.candidate) return;
-
     try {
+      if (!pcRef.current || !msg.candidate) return;
       await pcRef.current.addIceCandidate(msg.candidate);
     } catch (e) {
       console.warn("addIceCandidate error:", e);
@@ -171,9 +185,12 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
 
   const cleanupCall = () => {
     try {
-      if (pcRef.current) pcRef.current.close();
-    } catch (e) {}
-
+      if (pcRef.current) {
+        pcRef.current.close();
+      }
+    } catch (e) {
+      console.warn("pc close error:", e);
+    }
     pcRef.current = null;
 
     if (localStreamRef.current) {
@@ -188,35 +205,37 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
     setCameraOff(false);
   };
 
-  // End call
   const hangup = (notify = true) => {
     if (notify) {
       sendSignal({
         type: "hangup",
         from: currentUser.username,
-        to: targetUser
+        to: targetUser,
       });
     }
 
     cleanupCall();
     setCallState("idle");
-
     if (onClose) onClose();
   };
 
   const toggleMute = () => {
     if (!localStreamRef.current) return;
-    localStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));
+    localStreamRef.current.getAudioTracks().forEach((t) => {
+      t.enabled = !t.enabled;
+    });
     setMuted((prev) => !prev);
   };
 
   const toggleCamera = () => {
     if (!localStreamRef.current) return;
-    localStreamRef.current.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
+    localStreamRef.current.getVideoTracks().forEach((t) => {
+      t.enabled = !t.enabled;
+    });
     setCameraOff((prev) => !prev);
   };
 
-  // Expose signaling handler to parent
+  // Parent passes signals from WebSocket here
   useImperativeHandle(ref, () => ({
     async handleSignal(signal) {
       switch (signal.type) {
@@ -232,12 +251,11 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
         case "hangup":
           hangup(false);
           break;
-
         default:
           console.warn("Unknown signal type:", signal.type);
           break;
       }
-    }
+    },
   }));
 
   return (
@@ -257,7 +275,7 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
           style={{
             flex: 1,
             background: "black",
-            marginLeft: 10
+            marginLeft: 10,
           }}
         />
       </div>
@@ -274,7 +292,9 @@ const VideoCall = forwardRef(({ currentUser, targetUser, onClose }, ref) => {
           <>
             <button onClick={() => hangup(true)}>Hang Up</button>
             <button onClick={toggleMute}>{muted ? "Unmute" : "Mute"}</button>
-            <button onClick={toggleCamera}>{cameraOff ? "Camera On" : "Camera Off"}</button>
+            <button onClick={toggleCamera}>
+              {cameraOff ? "Camera On" : "Camera Off"}
+            </button>
           </>
         )}
       </div>
