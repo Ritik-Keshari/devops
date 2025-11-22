@@ -2,21 +2,41 @@
 .wa-app {
   display: flex;
   height: 100vh;
+  width: 100%;
   overflow: hidden;
   position: relative;
+  background: #f0f2f5;
+}
+
+/* SIDEBAR FIX — VERY IMPORTANT */
+.wa-sidebar {
+  width: 300px;                 /* FIX: Sidebar takes only 300px */
+  background: #fff;
+  border-right: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+}
+
+/* CHAT PANEL */
+.wa-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #e5ddd5;
 }
 
 /* CHILD PANELS */
 .wa-app > div {
   border-right: 1px solid #eee;
 }
+
+/* FILE UPLOAD BUTTON */
 .file-upload-btn {
   font-size: 20px;
   margin-right: 10px;
   cursor: pointer;
   user-select: none;
 }
-
 
 /* AI CHATBOX (RIGHT SIDEBAR) */
 .ai-chatbox {
@@ -39,7 +59,7 @@
   opacity: 1;
 }
 
-/* FIXED VIDEO CALL PANEL (OVERLAY) */
+/* VIDEO CALL PANEL (OVERLAY) */
 .video-call-wrapper {
   position: fixed;
   top: 0;
@@ -53,17 +73,14 @@
   flex-direction: column;
   padding: 10px;
 
-  /* Smooth slide animation */
   transform: translateX(100%);
   transition: transform 0.3s ease-in-out;
 }
 
-/* When active, slide it in */
 .video-call-wrapper.active {
   transform: translateX(0);
 }
 
-/* Ensure video elements adjust nicely */
 .video-call-wrapper video {
   width: 100%;
   border-radius: 10px;
