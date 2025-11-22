@@ -13,26 +13,24 @@ const MessageBubble = ({ message, me }) => {
   const isImage = message.type === "IMAGE";
   const isFile = message.type === "FILE";
 
-  // ⭐ Safe timestamp (fallback if missing)
   const time =
     message.timestamp
-      ? new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      ? new Date(message.timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
       : "";
 
   return (
     <div className={`bubble-row ${me ? "me" : "them"}`}>
       <div className={`bubble ${me ? "bubble-me" : "bubble-them"}`}>
 
-        {/* ⭐ IMAGE MESSAGE */}
+        {/* ⭐ IMAGE MESSAGE FIXED */}
         {isImage && (
           <img
             src={message.content}
-            alt=""
-            style={{
-              maxWidth: "200px",
-              borderRadius: "10px",
-              marginBottom: "5px"
-            }}
+            alt="sent"
+            className="chat-image"
           />
         )}
 
@@ -42,13 +40,7 @@ const MessageBubble = ({ message, me }) => {
             href={message.content}
             target="_blank"
             rel="noopener noreferrer"
-            style={{
-              color: "#0645AD",
-              textDecoration: "underline",
-              wordBreak: "break-all",
-              display: "inline-block",
-              marginBottom: "5px"
-            }}
+            className="chat-file"
           >
             📄 {getFileName(message.content)}
           </a>

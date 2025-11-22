@@ -126,3 +126,22 @@
   border-radius: 10px;
   background: black;
 }
+/* Chat images (prevent full-screen) */
+.chat-image {
+  width: 200px;          /* Limit width */
+  max-width: 100%;       /* Responsive */
+  height: auto;          /* Prevent stretching */
+  border-radius: 10px;
+  display: block;
+  margin-bottom: 5px;
+  object-fit: cover;     /* or 'contain' if you want full uncropped */
+}
+
+/* File link styling */
+.chat-file {
+  color: #0645AD;
+  text-decoration: underline;
+  word-break: break-all;
+  display: inline-block;
+  margin-bottom: 5px;
+}
