@@ -1,4 +1,4 @@
-# Step 1: Build React App
+# Stage 1: build
 FROM node:18 AS build
 WORKDIR /app
 COPY package*.json ./
@@ -6,10 +6,9 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Step 2: Serve using NGINX
-FROM nginx:stable
+# Stage 2: serve with nginx
+FROM nginx:stable-alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 80
-
-# Optional: Handle React Router (SPA)
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+CMD ["nginx", "-g", "daemon off;"]
